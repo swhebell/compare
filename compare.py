@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import pandas as pd
 import numpy as np
 
@@ -11,9 +5,6 @@ from scipy.stats import fisher_exact
 from scipy.stats import mannwhitneyu
 from scipy.stats import chi2_contingency
 from scipy.stats import kruskal
-
-
-# In[ ]:
 
 
 def compare_binary(sourcedf, comparisonvar, catlist="None", conlist="None",
@@ -35,7 +26,7 @@ def compare_binary(sourcedf, comparisonvar, catlist="None", conlist="None",
                 catlist.append(column)
                 
         if dummy_categoricals == True: # Create dummy variables for non-numeric columns
-            to_dummy = temp.select_dtypes(include=['object', 'category'])
+            to_dummy = temp.select_dtypes(include=['object', 'category']).columns.to_list()
             for var in to_dummy:
                 if len(temp[var].value_counts()) > 5:
                     print(var + " has more than 5 categorical values, excluding from comparison table.")
@@ -60,12 +51,12 @@ def compare_binary(sourcedf, comparisonvar, catlist="None", conlist="None",
                         catlist.append(column)
                         
             if dummy_categoricals == True:
-                to_dummy = temp.select_dtypes(include=['object', 'category'])
+                to_dummy = temp.select_dtypes(include=['object', 'category']).columns.to_list()
                 # Check for any variables passed in catlist that need to be converted to dummies
-                to_dummy.append([x for x in catlist if len(temp[x].value_counts()) > 2 if x not in to_dummy])
+                to_dummy.extend([x for x in catlist if len(temp[x].value_counts()) > 2 if x not in to_dummy])
                 for var in to_dummy:
                     if len(temp[var].value_counts()) > 5:
-                        print(var + " has more than 5 categorical values, excluding from comparison table.")
+                        print(var + " has more tßhan 5 categorical values, excluding from comparison table.")
                     else:
                         dummied = pd.get_dummies(temp[var], prefix=var)
                         catlist.extend(dummied.columns.to_list())
@@ -111,7 +102,7 @@ def compare_binary(sourcedf, comparisonvar, catlist="None", conlist="None",
         return str("[" + str(np.round(q25, decimals=1)) + " - " + str(np.round(q75, decimals=1)) + "]")
     
     # Create the comparison dataframe
-    comparison = pd.DataFrame(index = ['var_count', 'pop', comparisonvar+"_0", comparisonvar+"_1", 'p'], columns = (["n"] + catlist + conlist))
+    comparison = pd.DataFrame(index = ['var_count', 'pop', comparisonvar+"_0", comparisonvar+"_1", 'p', 'test'], columns = (["n"] + catlist + conlist))
     
     # Iterate through each column in the comparison dataframe and calculate 
     
@@ -181,17 +172,31 @@ def compare_binary(sourcedf, comparisonvar, catlist="None", conlist="None",
     # Mann Whitney U for continuous variables, fisher exact for binary
 
     for i in conlist:
-        sval, pval = mannwhitneyu(temp[temp[comparisonvar] == 0][i].dropna(),
-                                  temp[temp[comparisonvar] == 1][i].dropna(), alternative = 'two-sided')
-        comparison.loc['p', i] = np.round(pval, decimals = 3)
+        try:
+            sval, pval = mannwhitneyu(temp[temp[comparisonvar] == 0][i].dropna(),
+                                    temp[temp[comparisonvar] == 1][i].dropna(), alternative = 'two-sided')
+            comparison.loc['p', i] = np.round(pval, decimals = 3)
+            comparison.loc['test', i] = 'Mann Whitney U'
+        except:
+            comparison.loc['p', i] = np.nan
+            comparison.loc['test', i] = 'Cannot be compared'
+            print(i + " cannot be compared. P val will be NaN")
     
     for i in catlist:
         try:
             OR, p = fisher_exact(pd.crosstab(temp[comparisonvar], temp[i].dropna()))
             comparison.loc['p', i] = np.round(p, decimals = 3)
+            comparison.loc['test', i] = 'Fisher Exact'
         except:
-            stat, p, dof, expected = chi2_contingency(pd.crosstab(temp[comparisonvar], temp[i].dropna()))
-            comparison.loc['p', i] = np.round(p, decimals = 3)
+            try:
+                stat, p, dof, expected = chi2_contingency(pd.crosstab(temp[comparisonvar], temp[i].dropna()))
+                comparison.loc['p', i] = np.round(p, decimals = 3)
+                comparison.loc['test', i] = 'Chi Squared'
+            except: 
+                comparison.loc['p', i] = np.nan
+                comparison.loc['test', i] = 'Cannot be compared'
+                print(i + " cannot be compared. P val will be NaN")
+
     
     return comparison
 
@@ -218,7 +223,7 @@ def compare_groups(sourcedf, comparisonvar, catlist="None", conlist="None",
                 catlist.append(column)
                 
         if dummy_categoricals == True: # Create dummy variables for non-numeric columns
-            to_dummy = temp.select_dtypes(include=['object', 'category'])
+            to_dummy = temp.select_dtypes(include=['object', 'category']).columns.to_list()
             for var in to_dummy:
                 if len(temp[var].value_counts()) > 5:
                     print(var + " has more than 5 categorical values, excluding from comparison table.")
@@ -243,9 +248,9 @@ def compare_groups(sourcedf, comparisonvar, catlist="None", conlist="None",
                         catlist.append(column)
                         
             if dummy_categoricals == True:
-                to_dummy = temp.select_dtypes(include=['object', 'category'])
+                to_dummy = temp.select_dtypes(include=['object', 'category']).columns.to_list()
                 # Check for any variables passed in catlist that need to be converted to dummies
-                to_dummy.append([x for x in catlist if len(temp[x].value_counts()) > 2 if x not in to_dummy])
+                to_dummy.extend([x for x in catlist if len(temp[x].value_counts()) > 2 if x not in to_dummy])
                 for var in to_dummy:
                     if len(temp[var].value_counts()) > 5:
                         print(var + " has more than 5 categorical values, excluding from comparison table.")
@@ -380,4 +385,3 @@ def compare_groups(sourcedf, comparisonvar, catlist="None", conlist="None",
         comparison.loc['p', var] = np.round(p, decimals = 4)
     
     return comparison
-
